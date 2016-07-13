@@ -1,0 +1,19 @@
+name: hasktrip
+version: 0.14.1
+
+ghc-options: -Wall
+
+dependencies:
+  - base >= 4.7 && < 5
+  - text
+  - rdf4h
+
+library:
+  source-dirs: src
+
+executables:
+  hasktrip-exe:
+    main: Main.hs
+    source-dirs: app
+    dependencies:
+      - hasktrip

@@ -1,0 +1,8 @@
+flags: {}
+extra-package-dbs: []
+packages:
+- '.'
+extra-deps:
+- hgal-2.0.0.2
+- rdf4h-2.0.0
+resolver: lts-6.1
