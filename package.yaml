@@ -7,6 +7,10 @@ dependencies:
   - base >= 4.7 && < 5
   - text
   - rdf4h
+  - megaparsec
+  - containers
+  - array
+  - mtl
 
 library:
   source-dirs: src

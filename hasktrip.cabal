@@ -16,9 +16,15 @@ library
       base >= 4.7 && < 5
     , text
     , rdf4h
+    , megaparsec
+    , containers
+    , array
+    , mtl
   exposed-modules:
       Datalog
       Lib
+      MicroKanren
+      OldParser
       Parser
   default-language: Haskell2010
 
@@ -31,5 +37,9 @@ executable hasktrip-exe
       base >= 4.7 && < 5
     , text
     , rdf4h
+    , megaparsec
+    , containers
+    , array
+    , mtl
     , hasktrip
   default-language: Haskell2010
