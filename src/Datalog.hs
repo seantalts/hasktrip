@@ -50,7 +50,7 @@ instance Eq Term where
 
 instance Hashable Term where
   hashWithSalt salt (TermVar t i) = salt `hashWithSalt` t `hashWithSalt` i
-  hashWithSalt salt (TermConstant x) = salt `hashWithSalt` x
+  hashWithSalt s x = hashWithSalt s x
 
 ------------------------------------------
 ---- Unification ----
