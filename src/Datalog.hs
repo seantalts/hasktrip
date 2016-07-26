@@ -1,6 +1,5 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
-
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 module Datalog where
@@ -12,10 +11,10 @@ import Data.Maybe
 import Data.List (intercalate)
 import Control.Monad
 import qualified Data.HashMap.Strict as Map
-
 import Data.Typeable
 import Data.Hashable
 
+-- Helper function.
 polyEq :: (Typeable a, Typeable b, Eq b) => a -> b -> Bool
 polyEq a b = case cast a of
   Nothing -> False
@@ -42,6 +41,7 @@ data Literal = AppliedPredicate Text [Term]
 data Term where
   TermConstant :: (Show a, Eq a, Typeable a, Hashable a) => a -> Term
   TermVar      :: Text -> Int -> Term
+  deriving Typeable
 
 instance Eq Term where
   TermConstant a == TermConstant b = polyEq a b
@@ -53,7 +53,7 @@ instance Hashable Term where
   hashWithSalt s x = hashWithSalt s x
 
 ------------------------------------------
----- Unification ----
+---- Unification
 ------------------------------------------
 class Substitutes a where
   substitute :: Substitution -> a -> a
@@ -89,6 +89,7 @@ unify lhs rhs subs =
 instance Unifies Term Term where
   unifyExpr (TermConstant a) (TermConstant b) | polyEq a b = Just true
   unifyExpr lhs@(TermVar _ _) rhs = return $ newSub lhs rhs
+  unifyExpr lhs rhs@(TermVar _ _) = return $ newSub rhs lhs
   unifyExpr _ _ = Nothing
 
 instance Substitutes Term where
@@ -112,29 +113,21 @@ instance (Unifies a a) => Unifies [a] [a] where
 instance (Substitutes a) => Substitutes [a] where
   substitute subs = map (substitute subs)
 
-someTests :: IO ()
-someTests = do
-  -- pred(roy, tim) = pred(X, tim)
-  print $ unify (p"pred" ["roy", "tim"]) (p"pred" ["X", "tim"]) true
-  -- p(X, X) = p(tim, tim)
-  print $ unify (p"p" ["X", "X"]) (p"p" ["tim", "tim"]) true
-  -- p(X, X) = p(tim, roy)
-  print $ unify (p"p" ["X", "X"]) (p"p" ["tim", "roy"]) true
-  -- f(X, X) = f(Y, 3)
-  print $ unify (p"f" ["X", "X"]) (p"f" ["Y", "3"]) true
-  -- f(Y, 3) = F(X, X)
-  print $ unify (p"f" ["Y", "3"]) (p"f" ["X", "X"]) true
-
 --------------------------------
 ---- MicroKanren
 ---- remarkably true to the paper: http://webyrd.net/scheme-2013/papers/HemannMuKanren2013.pdf
 --------------------------------
 -- fresh, ===, disj, conj
 
-type Goal = (Substitution, Int) -> Maybe (Substitution, Int)
+type Goal = (Substitution, Int) -> [(Substitution, Int)]
 
 liftG :: (Substitution -> Maybe Substitution) -> Goal
-liftG f = \(subs, i) -> fmap (\subs' -> (subs', i)) $ f subs
+liftG f = \(subs, i) -> maybeToList $ fmap (\subs' -> (subs', i)) $ f subs
+
+-- Is there some way to automatically cast unknowns into TermConstant?
+--(===) :: (Show a, Eq a, Typeable a, Hashable a, Show b, Eq b, Typeable b, Hashable b) =>
+--         a -> b -> Goal
+--a === b = case cast a
 
 (===) :: Unifies a b => a -> b -> Goal
 a === b = liftG $ unify a b
@@ -216,6 +209,26 @@ instance Show Literal where
 ---------------------------------------
 ---- Some little tests for show
 ---------------------------------------
+
+unifyTests :: IO ()
+unifyTests = do
+  -- pred(roy, tim) = pred(X, tim)
+  print $ unify (p"pred" ["roy", "tim"]) (p"pred" ["X", "tim"]) true
+  -- p(X, X) = p(tim, tim)
+  print $ unify (p"p" ["X", "X"]) (p"p" ["tim", "tim"]) true
+  -- p(X, X) = p(tim, roy)
+  print $ unify (p"p" ["X", "X"]) (p"p" ["tim", "roy"]) true
+  -- f(X, X) = f(Y, 3)
+  print $ unify (p"f" ["X", "X"]) (p"f" ["Y", "3"]) true
+  -- f(Y, 3) = F(X, X)
+  print $ unify (p"f" ["Y", "3"]) (p"f" ["X", "X"]) true
+
+aAndB :: Goal
+aAndB = (conj (fresh (\a -> (a === (TermConstant (7 :: Int))))) (fresh (\b -> (disj (b === (TermConstant (5 :: Int))) (b === (TermConstant (6 :: Int)))))))
+
+mkTests :: IO ()
+mkTests = do
+  print $ aAndB (true, 0)
 
 database :: Database
 database = [
