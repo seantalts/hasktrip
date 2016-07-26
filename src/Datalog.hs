@@ -174,8 +174,10 @@ liftG f = \(subs, i) -> fmap (\subs' -> (subs', i)) $ f subs
 (===) :: Unifies a b => a -> b -> Goal
 a === b = liftG $ unify a b
 
-fresh :: (Int -> Goal) -> Goal
-fresh f (subs, idx) = (f idx) (subs, (idx + 1))
+-- Should I make a new type for Logic Variables so I don't let fresh
+-- functions take constants?
+fresh :: (Term -> Goal) -> Goal
+fresh f (subs, idx) = (f (TermVar "" idx)) (subs, (idx + 1))
 
 disj :: Goal -> Goal -> Goal
 disj g1 g2 sc = mplus (g1 sc) (g2 sc)
