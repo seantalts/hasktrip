@@ -1,6 +1,8 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
+
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Datalog where
 
@@ -10,13 +12,20 @@ import Data.Char (isUpper)
 import Data.Maybe
 import Data.List (intercalate)
 import Control.Monad
-import Control.Monad.State
-import qualified Data.Map.Strict as Map
+import qualified Data.HashMap.Strict as Map
+
+import Data.Typeable
+import Data.Hashable
 
 --import Data.Array
 
 
 --import Debug.Trace
+
+polyEq :: (Typeable a, Typeable b, Eq b) => a -> b -> Bool
+polyEq a b = case cast a of
+  Nothing -> False
+  Just b' -> b' == b
 
 --------------------------------
 ---- AST
@@ -24,23 +33,37 @@ import qualified Data.Map.Strict as Map
 type Program = [Statement]
 
 data Statement = Assertion Clause | Retraction Clause | Query Literal
-  deriving (Show)
+  deriving (Show, Eq)
 
 -- path(X, Y) :- edge(X, Y).
 infix 6 :-
 data Clause = Literal :- [Literal]
             | Fact Literal
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq)
 
 -- edge(a, b).
 data Literal = AppliedPredicate Text [Term]
-  deriving (Eq, Ord)
+  deriving (Eq)
 
 --a
 --X
-data Term = TermConstant Text
-          | TermVar Text Int
-            deriving (Eq, Ord)
+
+data Term where
+  TermConstant :: (Show a, Eq a, Typeable a, Hashable a) => a -> Term
+  TermVar      :: Text -> Int -> Term
+
+-- Gotta be a better way?
+instance Eq Term where
+  TermConstant a == TermConstant b = polyEq a b
+  TermVar t i    == TermVar t' i'  = (t, i) == (t', i')
+  _ == _                           = False
+
+instance Hashable Term where
+  hashWithSalt salt (TermVar t i) = salt `hashWithSalt` t `hashWithSalt` i
+  hashWithSalt salt (TermConstant x) = salt `hashWithSalt` x
+
+-- I want simplification to be able to be inserted after the fact
+-- Ideally, also unification on new data structures
 
 ------------------------------------------
 ---- DSL / Pretty syntax stuff
@@ -50,7 +73,7 @@ data Term = TermConstant Text
 -- figure out if something should be a variable or a constant.
 termFromString :: String -> Term
 termFromString s@(x:_) | isUpper x = TermVar (fromString s) 0
-termFromString s = TermConstant (fromString s)
+termFromString s = TermConstant ((fromString s) :: Text)
 
 instance IsString Term where
   fromString = termFromString
@@ -59,7 +82,7 @@ p :: String -> [Term] -> Literal
 p s = AppliedPredicate (fromString s)
 
 instance Show Term where
-  show (TermVar t i) = unpack t ++ show i
+  show (TermVar t i)    = unpack t ++ show i
   show (TermConstant t) = show t
 
 instance Show Literal where
@@ -68,8 +91,10 @@ instance Show Literal where
 ------------------------------------------
 ---- Unification ----
 ------------------------------------------
+class Substitutes a where
+  substitute :: Substitution -> a -> a
 
-type Substitution = Map.Map Term Term -- [(Term, Term)]
+type Substitution = Map.HashMap Term Term
 true :: Substitution
 true = Map.empty
 
@@ -81,100 +106,82 @@ addSub subs (key, val)
   | key /= val = Map.insert key val subs
   | otherwise = subs
 
-class Unifies a where
-  unify :: Substitution -> a -> a -> Maybe Substitution
-  substitute :: Substitution -> a -> a
+newSub :: Term -> Term -> Substitution
+newSub a b = addSub true (a, b)
 
-instance Unifies Term where
-  substitute _ (TermConstant x) = TermConstant x
-  substitute s x@(TermVar _ _) = fromMaybe x $ do -- better way to write this?
+class (Substitutes a, Substitutes b) => Unifies a b where
+  unifyExpr :: a -> b -> Maybe Substitution
+
+unify :: (Unifies a b, Substitutes a, Substitutes b) =>
+         a -> b -> Substitution -> Maybe Substitution
+unify lhs rhs subs =
+  let lhs' = substitute subs lhs
+      rhs' = substitute subs rhs
+  in fmap (Map.union subs) $ unifyExpr lhs' rhs'
+
+-- Move performing the substitution and adding new substitutions to the results
+-- to a helper function? And keep the type class core here?
+
+instance Unifies Term Term where
+  unifyExpr (TermConstant a) (TermConstant b) | polyEq a b = Just true
+  unifyExpr lhs@(TermVar _ _) rhs = return $ newSub lhs rhs
+  unifyExpr _ _ = Nothing
+
+instance Substitutes Term where
+  substitute _ x@(TermConstant _) = x
+  substitute s x@(TermVar _ _) = fromMaybe x $ do
     newVal <- findSub s x
     return $ substitute s newVal
-  unify subs lhs rhs =
-    let lhs' = substitute subs lhs
-        rhs' = substitute subs rhs
-    in case (lhs', rhs') of
-            (TermConstant _, TermConstant _)
-              | lhs' == rhs' -> Just subs
-            (TermVar _ _, _) -> return $ addSub subs (lhs', rhs')
-             -- here, instead of creating a new variable, we replace one with the
-             -- other. This is because I don't want to deal with the haskell state
-             -- stuff required to generate a new unique variable, but that could
-             -- end up being necessarrhs anrhswarhs.
-            (_, _) -> Nothing
 
-instance Unifies Literal where
+instance Substitutes Literal where
   substitute s (AppliedPredicate predSym predArgs) =
-     AppliedPredicate predSym $ substitute s predArgs
-  unify subs (AppliedPredicate xPred xArgs) (AppliedPredicate yPred yArgs)
-              | xPred == yPred = unify subs xArgs yArgs
-  unify _ _ _ = Nothing -- I'm using Nothing for F (failure)
+       AppliedPredicate predSym $ substitute s predArgs
 
--- for each : list something might unify on the left or right, is that safe?
-tryBothUnify :: Unifies a => Substitution -> (a, a) -> Maybe Substitution
-tryBothUnify subs (left, right) = -- What is the actual coolest way to write this
-  listToMaybe $ catMaybes [unify subs left right, unify subs right left]
+instance Unifies Literal Literal where
+  unifyExpr (AppliedPredicate xPred xArgs) (AppliedPredicate yPred yArgs)
+              | xPred == yPred = unifyExpr xArgs yArgs
+  unifyExpr _ _ = Nothing -- I'm using Nothing for F (failure)
 
-instance (Unifies a) => Unifies [a] where
+instance (Unifies a a) => Unifies [a] [a] where
+  unifyExpr lhs rhs = foldM (\subs (l, r) -> unify l r subs) true $ zip lhs rhs
+
+instance (Substitutes a) => Substitutes [a] where
   substitute subs = map (substitute subs)
-  unify subs lhs rhs = foldM tryBothUnify subs $ zip lhs rhs
 
 someTests :: IO ()
 someTests = do
   -- pred(roy, tim) = pred(X, tim)
-  print $ unify true (p"pred" ["roy", "tim"]) (p"pred" ["X", "tim"])
+  print $ unify (p"pred" ["roy", "tim"]) (p"pred" ["X", "tim"]) true
   -- p(X, X) = p(tim, tim)
-  print $ unify true (p"p" ["X", "X"]) (p"p" ["tim", "tim"])
+  print $ unify (p"p" ["X", "X"]) (p"p" ["tim", "tim"]) true
   -- p(X, X) = p(tim, roy)
-  print $ unify true (p"p" ["X", "X"]) (p"p" ["tim", "roy"])
+  print $ unify (p"p" ["X", "X"]) (p"p" ["tim", "roy"]) true
   -- f(X, X) = f(Y, 3)
-  print $ unify true (p"f" ["X", "X"]) (p"f" ["Y", "3"])
+  print $ unify (p"f" ["X", "X"]) (p"f" ["Y", "3"]) true
   -- f(Y, 3) = F(X, X)
-  print $ unify true (p"f" ["Y", "3"]) (p"f" ["X", "X"])
-
+  print $ unify (p"f" ["Y", "3"]) (p"f" ["X", "X"]) true
 
 --------------------------------
 ---- MicroKanren?
 --------------------------------
 -- fresh, ===, disj, conj
 
-type Var = Int
-type Goal = Substitution -> State Var (Maybe Substitution)
+type Goal = (Substitution, Int) -> Maybe (Substitution, Int)
 
-(===) :: Unifies a => a -> a -> Goal
-(a === b) subs = return $ unify subs a b
+liftG :: (Substitution -> Maybe Substitution) -> Goal
+liftG f = \(subs, i) -> fmap (\subs' -> (subs', i)) $ f subs
 
-fresh :: (Var -> Goal) -> Goal
-fresh f subs = do
-  varIndex <- get
-  put (varIndex + 1)
-  f varIndex subs
+(===) :: Unifies a b => a -> b -> Goal
+a === b = liftG $ unify a b
 
--- This is supposed to just be mplus (or mappend?)
-addSubsToState :: State Var (Maybe Substitution) -> Maybe Substitution -> State Var (Maybe Substitution)
-addSubsToState stateF Nothing = stateF
-addSubsToState stateF (Just subs) = do
-  subs2 <- stateF
-  return $ Just $ fromMaybe subs $ fmap (Map.union subs) subs2
-
--- This is supposed to just be "bind"
-subsBind :: State Var (Maybe Substitution) -> Maybe Substitution -> State Var (Maybe Substitution)
-subsBind _ Nothing = return Nothing --state $ \s -> (Nothing, s)
-subsBind stateF (Just subs) = do
-  subs2 <- stateF
-  return $ fmap (Map.union subs) subs2
+fresh :: (Int -> Goal) -> Goal
+fresh f (subs, idx) = (f idx) (subs, (idx + 1))
 
 disj :: Goal -> Goal -> Goal
-disj g1 g2 subs = do
-  let r1 = g1 subs
-  let r2 = g2 subs
-  r1 >>= (addSubsToState r2)
+disj g1 g2 sc = mplus (g1 sc) (g2 sc)
 
 conj :: Goal -> Goal -> Goal
-conj g1 g2 subs = do
-  let r1 = g1 subs
-  let r2 = g2 subs
-  r1 >>= (subsBind r2)
+conj g1 g2 sc = (g1 sc) >>= g2
 
 --------------------------------
 ---- query time!
@@ -213,7 +220,7 @@ branch :: Database -> [Literal] -> [(Substitution, [Literal])]
 branch _ [] = error "no goals" -- []
 branch db (goal:goals) = do
   h :- body <- db
-  subs <- maybeToList (unify true goal h)
+  subs <- maybeToList (unify goal h true)
   return (subs, substitute subs (body ++ goals))
 
 database :: Database

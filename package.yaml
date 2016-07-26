@@ -8,7 +8,8 @@ dependencies:
   - text
   - rdf4h
   - megaparsec
-  - containers
+  - hashable
+  - unordered-containers
   - array
   - mtl
 

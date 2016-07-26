@@ -17,7 +17,8 @@ library
     , text
     , rdf4h
     , megaparsec
-    , containers
+    , hashable
+    , unordered-containers
     , array
     , mtl
   exposed-modules:
@@ -38,7 +39,8 @@ executable hasktrip-exe
     , text
     , rdf4h
     , megaparsec
-    , containers
+    , hashable
+    , unordered-containers
     , array
     , mtl
     , hasktrip
