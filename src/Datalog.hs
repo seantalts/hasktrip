@@ -2,7 +2,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleInstances #-}
 
 module Datalog where
 
@@ -16,11 +15,6 @@ import qualified Data.HashMap.Strict as Map
 
 import Data.Typeable
 import Data.Hashable
-
---import Data.Array
-
-
---import Debug.Trace
 
 polyEq :: (Typeable a, Typeable b, Eq b) => a -> b -> Bool
 polyEq a b = case cast a of
@@ -45,14 +39,10 @@ data Clause = Literal :- [Literal]
 data Literal = AppliedPredicate Text [Term]
   deriving (Eq)
 
---a
---X
-
 data Term where
   TermConstant :: (Show a, Eq a, Typeable a, Hashable a) => a -> Term
   TermVar      :: Text -> Int -> Term
 
--- Gotta be a better way?
 instance Eq Term where
   TermConstant a == TermConstant b = polyEq a b
   TermVar t i    == TermVar t' i'  = (t, i) == (t', i')
@@ -61,32 +51,6 @@ instance Eq Term where
 instance Hashable Term where
   hashWithSalt salt (TermVar t i) = salt `hashWithSalt` t `hashWithSalt` i
   hashWithSalt salt (TermConstant x) = salt `hashWithSalt` x
-
--- I want simplification to be able to be inserted after the fact
--- Ideally, also unification on new data structures
-
-------------------------------------------
----- DSL / Pretty syntax stuff
-----------------------------------------
-
--- mostly handy for doing quick tests, but also used in the parser to
--- figure out if something should be a variable or a constant.
-termFromString :: String -> Term
-termFromString s@(x:_) | isUpper x = TermVar (fromString s) 0
-termFromString s = TermConstant ((fromString s) :: Text)
-
-instance IsString Term where
-  fromString = termFromString
-
-p :: String -> [Term] -> Literal
-p s = AppliedPredicate (fromString s)
-
-instance Show Term where
-  show (TermVar t i)    = unpack t ++ show i
-  show (TermConstant t) = show t
-
-instance Show Literal where
-  show (AppliedPredicate predName args) = show predName ++"(" ++ show args ++ ")"
 
 ------------------------------------------
 ---- Unification ----
@@ -162,7 +126,8 @@ someTests = do
   print $ unify (p"f" ["Y", "3"]) (p"f" ["X", "X"]) true
 
 --------------------------------
----- MicroKanren?
+---- MicroKanren
+---- remarkably true to the paper: http://webyrd.net/scheme-2013/papers/HemannMuKanren2013.pdf
 --------------------------------
 -- fresh, ===, disj, conj
 
@@ -224,6 +189,33 @@ branch db (goal:goals) = do
   h :- body <- db
   subs <- maybeToList (unify goal h true)
   return (subs, substitute subs (body ++ goals))
+
+------------------------------------------
+---- DSL / Pretty syntax stuff
+----------------------------------------
+
+-- mostly handy for doing quick tests, but also used in the parser to
+-- figure out if something should be a variable or a constant.
+termFromString :: String -> Term
+termFromString s@(x:_) | isUpper x = TermVar (fromString s) 0
+termFromString s = TermConstant ((fromString s) :: Text)
+
+instance IsString Term where
+  fromString = termFromString
+
+p :: String -> [Term] -> Literal
+p s = AppliedPredicate (fromString s)
+
+instance Show Term where
+  show (TermVar t i)    = unpack t ++ show i
+  show (TermConstant t) = show t
+
+instance Show Literal where
+  show (AppliedPredicate predName args) = show predName ++"(" ++ show args ++ ")"
+
+---------------------------------------
+---- Some little tests for show
+---------------------------------------
 
 database :: Database
 database = [
