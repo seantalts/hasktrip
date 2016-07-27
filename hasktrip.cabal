@@ -25,6 +25,7 @@ library
       Datalog
       Lib
       MicroKanren
+      MiniDatalog
       OldParser
       Parser
   default-language: Haskell2010

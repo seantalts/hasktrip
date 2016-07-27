@@ -220,4 +220,5 @@ The last one demonstrates our nifty BFS search strategy - it alternates
 between solutions that set Var 0 to 5 and solutions that set Var 0 to 6.
 
 I hope you enjoyed; feel free to submit pull requests or otherwise
-comment on this!
+comment on this! This file was generated from [this literate Haskell
+file](../src/MicroKanren.lhs)
