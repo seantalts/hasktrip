@@ -89,16 +89,16 @@ Here we create the traditional empty state we can pass to goals, and we're ready
 
 > emptyState :: (Substitution, Int)
 > emptyState = ([], 0)
-
+>
 > fives :: Term -> Goal
 > fives x = disj (x === (Atom "5")) (fives x)
-
+>
 > sixes :: Term -> Goal
 > sixes x = disj (x === (Atom "6")) (sixes x)
-
+>
 > fivesOrSixes :: Goal
 > fivesOrSixes = fresh $ \x -> disj (fives x) (sixes x)
-
+>
 > mkTests :: IO ()
 > mkTests = do
 >   print $ aAndB emptyState

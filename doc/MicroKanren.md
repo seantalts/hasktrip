@@ -189,24 +189,16 @@ we're ready to start running tests!
 ``` haskell
 emptyState :: (Substitution, Int)
 emptyState = ([], 0)
-```
 
-``` haskell
 fives :: Term -> Goal
 fives x = disj (x === (Atom "5")) (fives x)
-```
 
-``` haskell
 sixes :: Term -> Goal
 sixes x = disj (x === (Atom "6")) (sixes x)
-```
 
-``` haskell
 fivesOrSixes :: Goal
 fivesOrSixes = fresh $ \x -> disj (fives x) (sixes x)
-```
 
-``` haskell
 mkTests :: IO ()
 mkTests = do
   print $ aAndB emptyState
