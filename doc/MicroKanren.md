@@ -8,7 +8,7 @@ in Haskell.
 
 Let's get set up:
 
-``` {.sourceCode .literate .haskell}
+``` haskell
 module MicroKanren where
 import Data.List (transpose)
 import Data.Maybe (fromMaybe)
@@ -18,7 +18,7 @@ These occur up at the front mostly for bookkeeping. I'll explain them
 where they're used later. By the end of this, we'll be able to make
 logic programs that look like the following:
 
-``` {.sourceCode .literate .haskell}
+``` haskell
 aAndB :: Goal
 aAndB = conj (fresh (\a -> a === (Atom "7")))
              (fresh (\b -> disj
@@ -33,7 +33,7 @@ logic variables such that the logic variable `a` can be substituted with
 microKanren API. As you can see, the only objects in microKanren are
 either logic variables (`Var`s) or `Atom`s:
 
-``` {.sourceCode .literate .haskell}
+``` haskell
 data Term = Var Int | Atom String
   deriving (Eq, Show)
 ```
@@ -42,7 +42,7 @@ Turns out all we need to represent a logic var is a kind of ID, which I
 don't think makes for particularly pleasing output but the reduction
 here helps illustrate the truly minimal core of microKanren.
 
-``` {.sourceCode .literate .haskell}
+``` haskell
 type Substitution = [(Term, Term)]
 ```
 
@@ -51,7 +51,7 @@ program (proram is another word here for list of equations or
 constraints). We call a complete list of these satisfying some program a
 Substitution.
 
-``` {.sourceCode .literate .haskell}
+``` haskell
 walk :: Substitution -> Term -> Term
 walk s x@(Var _) = fromMaybe x $ fmap (walk s) $ lookup x s
 walk _ x = x
@@ -70,7 +70,7 @@ substituted with Atom 3.
 
 Here's the first meaty bit! Hold on to your butts:
 
-``` {.sourceCode .literate .haskell}
+``` haskell
 unify :: Term -> Term -> Substitution -> Maybe Substitution
 unify lhs rhs subs = fmap (++ subs) $ unifyExpr (walk subs lhs) (walk subs rhs)
   where unifyExpr (Atom a) (Atom b) | a == b = return []
@@ -97,7 +97,7 @@ returned by unifyExpr, if there were any.
 
 MicroKanren has this big concept of a goal, defined here:
 
-``` {.sourceCode .literate .haskell}
+``` haskell
 type Goal = (Substitution, Int) -> [(Substitution, Int)]
 ```
 
@@ -111,7 +111,7 @@ be used for further composition.
 
 Now we get to the bread and butter of our API, `===`:
 
-``` {.sourceCode .literate .haskell}
+``` haskell
 (===) :: Term -> Term -> Goal
 (a === b) (subs, c) =
   case unify a b subs of
@@ -131,7 +131,7 @@ is that MonadPlus has an additive identity called `mzero` and an
 addition operation called `mplus`. For lists this is just empty list and
 `++`, which concatenates one list with another).
 
-``` {.sourceCode .literate .haskell}
+``` haskell
 fresh :: (Term -> Goal) -> Goal
 fresh f (subs, idx) = (f (Var idx)) (subs, (idx + 1))
 ```
@@ -166,7 +166,7 @@ element is a list of all of the 2nd elements, and so on. We then concat
 all of these together to get a list of alternating goal-satisfying
 substitutions
 
-``` {.sourceCode .literate .haskell}
+``` haskell
 disj :: Goal -> Goal -> Goal
 disj g1 g2 sc = (concat . transpose) [(g1 sc), (g2 sc)]
 ```
@@ -178,7 +178,7 @@ of continue the process on in further goals. Each goal is a valid logic
 program by itself and you need its progress in logic variable bindings
 in order to compose them.
 
-``` {.sourceCode .literate .haskell}
+``` haskell
 conj :: Goal -> Goal -> Goal
 conj g1 g2 sc = g1 sc >>= g2
 ```
@@ -186,27 +186,27 @@ conj g1 g2 sc = g1 sc >>= g2
 Here we create the traditional empty state we can pass to goals, and
 we're ready to start running tests!
 
-``` {.sourceCode .literate .haskell}
+``` haskell
 emptyState :: (Substitution, Int)
 emptyState = ([], 0)
 ```
 
-``` {.sourceCode .literate .haskell}
+``` haskell
 fives :: Term -> Goal
 fives x = disj (x === (Atom "5")) (fives x)
 ```
 
-``` {.sourceCode .literate .haskell}
+``` haskell
 sixes :: Term -> Goal
 sixes x = disj (x === (Atom "6")) (sixes x)
 ```
 
-``` {.sourceCode .literate .haskell}
+``` haskell
 fivesOrSixes :: Goal
 fivesOrSixes = fresh $ \x -> disj (fives x) (sixes x)
 ```
 
-``` {.sourceCode .literate .haskell}
+``` haskell
 mkTests :: IO ()
 mkTests = do
   print $ aAndB emptyState
