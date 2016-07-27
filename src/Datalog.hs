@@ -8,7 +8,7 @@ import Data.Text (Text, unpack)
 import Data.String
 import Data.Char (isUpper)
 import Data.Maybe
-import Data.List (intercalate)
+import Data.List (intercalate, transpose)
 import Control.Monad
 import qualified Data.HashMap.Strict as Map
 import Data.Typeable
@@ -83,9 +83,6 @@ unify lhs rhs subs =
       rhs' = substitute subs rhs
   in fmap (Map.union subs) $ unifyExpr lhs' rhs'
 
--- Move performing the substitution and adding new substitutions to the results
--- to a helper function? And keep the type class core here?
-
 instance Unifies Term Term where
   unifyExpr (TermConstant a) (TermConstant b) | polyEq a b = Just true
   unifyExpr lhs@(TermVar _ _) rhs = return $ newSub lhs rhs
@@ -117,20 +114,24 @@ instance (Substitutes a) => Substitutes [a] where
 ---- MicroKanren
 ---- remarkably true to the paper: http://webyrd.net/scheme-2013/papers/HemannMuKanren2013.pdf
 --------------------------------
--- fresh, ===, disj, conj
 
 type Goal = (Substitution, Int) -> [(Substitution, Int)]
 
 liftG :: (Substitution -> Maybe Substitution) -> Goal
 liftG f = \(subs, i) -> maybeToList $ fmap (\subs' -> (subs', i)) $ f subs
 
--- Is there some way to automatically cast unknowns into TermConstant?
---(===) :: (Show a, Eq a, Typeable a, Hashable a, Show b, Eq b, Typeable b, Hashable b) =>
---         a -> b -> Goal
---a === b = case cast a
+toTerm :: (Show a, Eq a, Typeable a, Hashable a) => a -> Term
+toTerm a =
+  case cast a of
+    Nothing -> TermConstant a
+    Just a' -> a'
 
-(===) :: Unifies a b => a -> b -> Goal
-a === b = liftG $ unify a b
+-- Is there some way to shorten this declaration?
+(===) :: (Show a, Eq a, Typeable a, Hashable a, Show b, Eq b, Typeable b, Hashable b) =>
+         a -> b -> Goal
+a === b = let a' = toTerm a
+              b' = toTerm b
+          in liftG $ unify a' b'
 
 -- Should I make a new type for Logic Variables so I don't let fresh
 -- functions take constants?
@@ -138,10 +139,13 @@ fresh :: (Term -> Goal) -> Goal
 fresh f (subs, idx) = (f (TermVar "" idx)) (subs, (idx + 1))
 
 disj :: Goal -> Goal -> Goal
-disj g1 g2 sc = mplus (g1 sc) (g2 sc)
+disj g1 g2 sc = (concat . transpose) [(g1 sc), (g2 sc)]
 
 conj :: Goal -> Goal -> Goal
 conj g1 g2 sc = (g1 sc) >>= g2
+
+emptyState :: (Substitution, Int)
+emptyState = (true, 0)
 
 --------------------------------
 ---- query time!
@@ -224,11 +228,26 @@ unifyTests = do
   print $ unify (p"f" ["Y", "3"]) (p"f" ["X", "X"]) true
 
 aAndB :: Goal
-aAndB = (conj (fresh (\a -> (a === (TermConstant (7 :: Int))))) (fresh (\b -> (disj (b === (TermConstant (5 :: Int))) (b === (TermConstant (6 :: Int)))))))
+aAndB = conj a b
+  where a = fresh (\q -> (q === (7 :: Int)))
+        b = fresh (\q -> (disj
+                          (q === (5 :: Int))
+                          (q === (6 :: Int))))
+
+fives :: Term -> Goal
+fives x = disj (x === (1 :: Int)) (fives x)
+
+sixes :: Term -> Goal
+sixes x = disj (x === (6 :: Int)) (sixes x)
+
+fivesOrSixes :: Goal
+fivesOrSixes = fresh $ \x -> disj (fives x) (sixes x)
 
 mkTests :: IO ()
 mkTests = do
-  print $ aAndB (true, 0)
+  print $ aAndB emptyState
+  print $ take 4 $ (fives (TermVar "" 0)) emptyState
+  print $ take 6 $ fivesOrSixes emptyState
 
 database :: Database
 database = [
@@ -239,8 +258,8 @@ database = [
   p"path"["X", "Y"] :- [p"edge" ["X", "Y"]],
   p"path"["X", "Y"] :- [p"edge" ["X", "Z"], p"path"["Z", "Y"]]]
 
-q :: Literal
-q = p"path" ["X", "Y"]
+edgeQuery :: Literal
+edgeQuery = p"path" ["X", "Y"]
 
 getQuerySubs :: [Literal] -> Substitution -> [(Term, Term)]
 getQuerySubs query subs=
@@ -262,6 +281,6 @@ subs2str = unwords . map sub2str
 
 printQuery :: Int -> IO ()
 printQuery i = do
-  let results = take i $ run database [q]
-      results' = map (getQuerySubs [q]) results
+  let results = take i $ run database [edgeQuery]
+      results' = map (getQuerySubs [edgeQuery]) results
   putStrLn $ intercalate "\n" $ map subs2str results'
