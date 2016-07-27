@@ -16,9 +16,7 @@ data Term = Var LVar | Atom String
 type Substitution = [(Term, Term)]
 
 walk :: Substitution -> Term -> Term
-walk s x@(Var _) = fromMaybe x $ do
-  newVal <- lookup x s
-  return $ walk s newVal
+walk s x@(Var _) = fromMaybe x $ fmap (walk s) $ lookup x s
 walk _ x = x
 
 unify :: Term -> Term -> Substitution -> Maybe Substitution
@@ -36,9 +34,10 @@ unify lhs rhs subs = fmap (++ subs) $ unifyExpr (walk subs lhs) (walk subs rhs)
 type Goal = (Substitution, Int) -> [(Substitution, Int)]
 
 (===) :: Term -> Term -> Goal
-a === b = \(subs, c) -> case unify a b subs of
-  Nothing -> mzero
-  Just subs' -> return (subs', c)
+(a === b) (subs, c) =
+  case unify a b subs of
+    Nothing -> mzero
+    Just subs' -> return (subs', c)
 
 fresh :: (Term -> Goal) -> Goal
 fresh f (subs, idx) = (f (Var idx)) (subs, (idx + 1))
