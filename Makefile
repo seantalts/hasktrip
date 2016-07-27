@@ -1,2 +1,6 @@
-docs: 
-	pandoc -f markdown+lhs -t markdown src/MicroKanren.lhs | sed -e 's/{.sourceCode .literate .haskell}/haskell/' > doc/MicroKanren.md
+DOCS=MicroKanren
+
+docs: $(DOCS)
+
+$(DOCS):
+	pandoc -f markdown+lhs -t markdown src/$@.lhs | sed -e 's/{.sourceCode .literate .haskell}/haskell/' > doc/$@.md
