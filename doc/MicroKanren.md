@@ -88,6 +88,9 @@ unify lhs rhs subs = (++ subs) <$> unifyExpr (walk subs lhs) (walk subs rhs)
         unifyExpr _ _ = Nothing
 ```
 
+Okay, let's step back a bit. We'll take the 30,000 foot view and then
+drill up from the bottom and hope we meet in the middle.
+
 At a high level, unification takes an equation (i.e. `X === 7`) with a
 left and right-hand side and tries to find substitutions for the
 variables in each side that will satisfy the equation. That's it! The
