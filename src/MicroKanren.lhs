@@ -59,11 +59,11 @@ At a high level, unification takes an equation (i.e. `X === 7`) with a left and 
 
 The line above unifyExpr starting with `(++ subs)` is a little scary at first, but bear with me. Furthest to the right we apply our substitutions to the left and right hand sides with `walk`. This just gives us new terms to give to unifyExpr. unifyExpr returns a Maybe Substitution, meaning we might fail to unify with Nothing or we might return a new substitution. We use `<$>` (which is basically the Control.Applicative version of `fmap`) on the Maybe monad to add the new substitutions to the ones returned by unifyExpr, if there were any. The way `fmap` and `<$>` work, if we're dealing with `Nothing` then we just pass Nothing right along, and we only add the new substitutions to the existing substitutions if we found some set of substitutions that satisfied our equation.
 
-MicroKanren has this big concept of a goal, defined here:
+MicroKanren has this big concept of a goal, used to denote basically an additional constraint that, given some pre-existing context for the logical program, can generate additional possible (i.e. satisfying) contexts. A goal is defined here:
 
 > type Goal = (Substitution, Int) -> [(Substitution, Int)]
 
-A goal is just a function that accepts a `Substitution` and an integer representing the index of the next available logic variable and returns a list of these. We will be composing goals in the future, so it's important that they accept both our set of existing substitutions and our current logic variable index. Goals return a list of new substitutions that satisfy the goal, along with their respective logic variable indices, which can be used for further composition. We will see this further composition with `conj`.
+As you can see, a goal is just a function that accepts a `Substitution` and an integer representing the index of the next available logic variable and returns a list of these. We will be composing goals in the future, so it's important that they accept both our set of existing substitutions and our current logic variable index. Goals return a list of new substitutions that satisfy the goal, along with their respective logic variable indices, which can be used for further composition. We will see this further composition with `conj`.
 
 Short interlude into logic variable numberings
 -----------------------------------------------
