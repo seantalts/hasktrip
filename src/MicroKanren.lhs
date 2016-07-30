@@ -53,11 +53,11 @@ Here's the first meaty bit! Hold on to your butts:
 >         unifyExpr l r@(Var _) = return [(r, l)]
 >         unifyExpr _ _ = Nothing
 
-Okay, let's step back a bit. We'll take the 30,000 foot view and then drill up from the bottom and hope we meet in the middle.
+Okay, let's step back for a second. We'll take the 30,000 foot view and then drill up from the bottom and hope we meet in the middle.
 
-At a high level, unification takes an equation (i.e. `X === 7`) with a left and right-hand side and tries to find substitutions for the variables in each side that will satisfy the equation. That's it! The code in unifyExpr at the bottom of this block tells us what to do with each possible pairing. Atoms are equal if their contents are equal. If we have a logic Var on either side, we try substituting the Var with its pair on the other side. Anything else doesn't unify.
+At a high level, unification takes an equation (e.g. `X === 7`) with a left and right-hand side and tries to find substitutions for the variables in each side that will satisfy the equation. That's it! The code in `unifyExpr` at the bottom of this block tells us what to do with each possible pairing. Atoms are equal if their contents are equal. If we have a logic Var on either side, we try substituting the Var with its pair on the other side. Anything fails to unify, meaning we couldn't find a way to make the two sides of the equation equal to each other.
 
-The line above unifyExpr starting with `(++ subs)` is a little scary at first, but bear with me. Furthest to the right we apply our substitutions to the left and right hand sides with `walk`. This just gives us new terms to give to unifyExpr. unifyExpr returns a Maybe Substitution, meaning we might fail to unify with Nothing or we might return a new substitution. We use `<$>` (which is basically the Control.Applicative version of `fmap`) on the Maybe monad to add the new substitutions to the ones returned by unifyExpr, if there were any. The way `fmap` and `<$>` work, if we're dealing with `Nothing` then we just pass Nothing right along, and we only add the new substitutions to the existing substitutions if we found some set of substitutions that satisfied our equation.
+The line above `unifyExpr` starting with `(++ subs)` is a little scary at first, but bear with me. Furthest to the right we apply our substitutions to the left and right hand sides with `walk`. This just gives us new terms to give to `unifyExpr`. This returns a `Maybe Substitution`, meaning we might fail to unify with `Nothing` or we might return a new substitution. We use `<$>` (which is basically the Control.Applicative version of `fmap`) on the Maybe monad to add the new substitutions to the ones returned by `unifyExpr`, if there were any. The way `fmap` and `<$>` work, if we're dealing with `Nothing` then we just pass Nothing right along, and we only add the new substitutions to the existing substitutions if we found some set of substitutions that satisfied our equation.
 
 MicroKanren has this big concept of a goal, used to denote basically an additional constraint that, given some pre-existing context for the logical program, can generate additional possible (i.e. satisfying) contexts. A goal is defined here:
 
@@ -121,8 +121,8 @@ Here we create the traditional empty state we can pass to goals, and we're ready
 > fivesOrSixes :: Goal
 > fivesOrSixes = fresh $ \x -> disj (fives x) (sixes x)
 >
-> mkTests :: IO ()
-> mkTests = do
+> mKTests :: IO ()
+> mKTests = do
 >   print $ aAndB emptyState
 >   print $ take 4 $ (fives (Var 0)) emptyState
 >   print $ take 6 $ fivesOrSixes emptyState
