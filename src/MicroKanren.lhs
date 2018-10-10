@@ -7,7 +7,6 @@ Let's get set up:
 
 > module MicroKanren where
 > import Data.List (transpose)
-> import Data.Maybe (fromMaybe)
 
 These occur up at the front mostly for bookkeeping. I'll explain them where they're used later.
 
@@ -31,7 +30,7 @@ Turns out all we need to represent a logic var is a kind of ID, which I don't th
 Logic programs output pairs of variable bindings that satisfy the input program (proram is another word here for list of equations or constraints). We call a complete list of these satisfying some program a Substitution. You can think of this as an associative list, where each pair is the first element set equal to the second element.
 
 > walk :: Substitution -> Term -> Term
-> walk s x@(Var _) = fromMaybe x $ fmap (walk s) $ lookup x s
+> walk s x@(Var _) = maybe x (walk s) (lookup x s)
 > walk _ x = x
 
 When we want to find out what a variable is referring to in our substitution, we use walk. Walk is so-called because it recursively looks up any transitive definitions, e.g. X = Y = Z, spitting out Z when asked what X means. Here's an example:
